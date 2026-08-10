@@ -71,13 +71,26 @@ Dev-контейнер остаётся основным способом сбо
   (`include\llvm-c`, `libclang.lib`) и нет `lib\cmake\clang\ClangConfig.cmake`.
   Подходит архив с той же страницы релиза:
 
-  ```
-  https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz
+  ```powershell
+  curl.exe -L -o "$env:TEMP\clang+llvm.tar.xz" `
+    https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz
+  New-Item -ItemType Directory -Force C:\LLVM | Out-Null
+  python -m tarfile -e "$env:TEMP\clang+llvm.tar.xz" C:\LLVM
   ```
 
-  Распакуйте его куда угодно (`tar -xJf <файл>`) и передайте путь ключом
-  `-ClangInstallDir` либо задайте переменную окружения `CT_CLANG_INSTALL_DIR`.
-  Проверялось на 20.1.8 — той же мажорной версии, что и LLVM в dev-контейнере.
+  Распаковка Python-ом, а не `tar -xJf`: встроенный в Windows 10 `tar.exe`
+  (bsdtar 3.5.2) собран без LZMA и отвечает
+  `Can't initialize filter; unable to run program "xz -d -qq"`.
+
+  Распакованный в `C:\LLVM\` дистрибутив скрипт находит сам — ни ключа, ни
+  переменной окружения не нужно: он ищет там каталог вида
+  `clang+llvm-*-windows-msvc` и проверяет, что внутри действительно есть
+  `include\llvm` и `lib\cmake\clang\ClangConfig.cmake`. Если распаковали в
+  другое место, передайте путь ключом `-ClangInstallDir` либо задайте
+  переменную окружения `CT_CLANG_INSTALL_DIR`. Проверялось на
+  `clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz` (896 МиБ архивом, около
+  4 ГиБ после распаковки) — та же мажорная версия, что и LLVM 20 в
+  dev-контейнере.
 - **GoogleTest ставить не нужно**: его тянет `FetchContent`, поэтому первой сборке
   нужен интернет, а последующим — уже нет.
 
@@ -88,8 +101,14 @@ Dev-контейнер остаётся основным способом сбо
 ### Как собрать
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+```
+
+Если Clang/LLVM лежит не в `C:\LLVM\`, укажите его явно:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 `
-    -ClangInstallDir C:\llvm\clang+llvm-20.1.8-x86_64-pc-windows-msvc
+    -ClangInstallDir D:\toolchains\clang+llvm-20.1.8-x86_64-pc-windows-msvc
 ```
 
 Скрипт конфигурирует CMake, собирает всё, прогоняет `ctest` и в конце печатает
