@@ -58,6 +58,72 @@ endif()
 message(STATUS "Found Clang ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using ClangConfig.cmake in: ${CT_Clang_INSTALL_DIR}")
 
+#===============================================================================
+# 2a. REPAIR THE DIA SDK PATH BAKED INTO LLVM's WINDOWS BINARY RELEASE
+#===============================================================================
+# LLVMExports.cmake is generated on llvm.org's release machine, and for
+# LLVMDebugInfoPDB it records the *absolute* path of the diaguids.lib that
+# machine happened to have (a Visual Studio 2019 Professional DIA SDK). That
+# path is a hard dependency in the generated build system, so on any other
+# Windows box the build dies before compiling anything, with
+#   ninja: error: '.../2019/Professional/DIA SDK/lib/amd64/diaguids.lib',
+#          needed by 'refactor_tool.exe', missing and no known rule to make it
+# The fix is to swap that one stale entry for the DIA SDK of the Visual Studio
+# actually installed here. Nothing outside Windows/MSVC is touched, so the
+# dev-container build is unaffected.
+if(MSVC AND TARGET LLVMDebugInfoPDB)
+  get_target_property(CT_PDB_LINK_LIBRARIES LLVMDebugInfoPDB INTERFACE_LINK_LIBRARIES)
+
+  set(CT_PDB_LINK_LIBRARIES_FIXED "")
+  set(CT_DIA_SDK_REPAIRED FALSE)
+  foreach(CT_PDB_LINK_ITEM IN LISTS CT_PDB_LINK_LIBRARIES)
+    # Only absolute paths can go stale; plain target names such as LLVMSupport
+    # are resolved by CMake and must be passed through untouched.
+    if(IS_ABSOLUTE "${CT_PDB_LINK_ITEM}" AND NOT EXISTS "${CT_PDB_LINK_ITEM}")
+      get_filename_component(CT_MISSING_LIBRARY_NAME "${CT_PDB_LINK_ITEM}" NAME_WE)
+
+      # VSINSTALLDIR is exported by vcvars64.bat (scripts/build_windows.ps1
+      # imports it); deriving the root from cl.exe as well keeps this working in
+      # a Developer PowerShell or a VS generator run, where it may be unset.
+      # cl.exe lives at <VS>/VC/Tools/MSVC/<version>/bin/Host<arch>/<arch>/cl.exe,
+      # i.e. seven directory levels below the Visual Studio root.
+      get_filename_component(CT_VS_ROOT_FROM_COMPILER "${CMAKE_CXX_COMPILER}" DIRECTORY)
+      foreach(CT_UNUSED_INDEX RANGE 6)
+        get_filename_component(CT_VS_ROOT_FROM_COMPILER "${CT_VS_ROOT_FROM_COMPILER}" DIRECTORY)
+      endforeach()
+
+      unset(CT_DIA_SDK_LIBRARY CACHE)
+      find_library(CT_DIA_SDK_LIBRARY
+        NAMES "${CT_MISSING_LIBRARY_NAME}"
+        HINTS
+          "$ENV{VSINSTALLDIR}/DIA SDK/lib/amd64"
+          "${CT_VS_ROOT_FROM_COMPILER}/DIA SDK/lib/amd64"
+        NO_DEFAULT_PATH)
+
+      if(NOT CT_DIA_SDK_LIBRARY)
+        message(FATAL_ERROR
+          " LLVMDebugInfoPDB refers to '${CT_PDB_LINK_ITEM}', which does not\n"
+          " exist on this machine, and no replacement '${CT_MISSING_LIBRARY_NAME}'\n"
+          " was found in the local DIA SDK. Install the 'Desktop development\n"
+          " with C++' workload of Visual Studio (it ships <VS>/DIA SDK), or run\n"
+          " this build from a Visual Studio developer prompt so that VSINSTALLDIR\n"
+          " is set.")
+      endif()
+
+      message(STATUS "Repointing ${CT_MISSING_LIBRARY_NAME} to ${CT_DIA_SDK_LIBRARY}")
+      list(APPEND CT_PDB_LINK_LIBRARIES_FIXED "${CT_DIA_SDK_LIBRARY}")
+      set(CT_DIA_SDK_REPAIRED TRUE)
+    else()
+      list(APPEND CT_PDB_LINK_LIBRARIES_FIXED "${CT_PDB_LINK_ITEM}")
+    endif()
+  endforeach()
+
+  if(CT_DIA_SDK_REPAIRED)
+    set_target_properties(LLVMDebugInfoPDB PROPERTIES
+      INTERFACE_LINK_LIBRARIES "${CT_PDB_LINK_LIBRARIES_FIXED}")
+  endif()
+endif()
+
 message("CLANG STATUS:
   Includes (clang)    ${CLANG_INCLUDE_DIRS}
   Includes (llvm)     ${LLVM_INCLUDE_DIRS}"
@@ -79,26 +145,53 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Compiler flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall\
+if(MSVC)
+  # cl.exe silently accepts "-Wall" as its own /Wall and then buries the build
+  # in warnings raised inside LLVM's own headers, and it has no
+  # -fdiagnostics-color at all, so the GCC/Clang flags are replaced here rather
+  # than reused. /utf-8 is not cosmetic: the sources carry Russian diagnostic
+  # text, and without it MSVC decodes these UTF-8 files with the system ANSI
+  # code page and emits mojibake (or C2001 on a split multi-byte sequence).
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /utf-8")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall\
     -fdiagnostics-color=always")
+endif()
 
 # LLVM/Clang is normally built without RTTI. Be consistent with that.
 if(NOT LLVM_ENABLE_RTTI)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+  endif()
 endif()
 
 # -fvisibility-inlines-hidden is set when building LLVM and on Darwin warnings
 # are triggered if llvm-tutor is built without this flag (though otherwise it
 # builds fine). For consistency, add it here too.
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-fvisibility-inlines-hidden"
-  SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG)
-if(${SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG} EQUAL "1")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
+# MSVC is excluded: it has no equivalent of this flag, and a failed
+# check_cxx_compiler_flag leaves the result variable empty, which turns the
+# unquoted `if(${...} EQUAL "1")` below into a CMake syntax error before the
+# project can even be configured.
+if(NOT MSVC)
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-fvisibility-inlines-hidden"
+    SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG)
+  if(${SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG} EQUAL "1")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
+  endif()
 endif()
 
 # Set the build directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+
+# tests/CMakeLists.txt already calls gtest_discover_tests(), but the tests it
+# registers are only written to a CTestTestfile.cmake if testing is enabled at
+# the top of the tree. Without this line `ctest` prints "No tests were found!!!"
+# and - worse - still exits 0, so the test presets in CMakePresets.json would
+# report a pass while running nothing at all.
+enable_testing()
 
 #===============================================================================
 # 4. ADD SUB-TARGETS

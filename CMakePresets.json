@@ -1,0 +1,132 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-default",
+      "displayName": "Linux (dev container, GCC + LLVM 20, Debug)",
+      "description": "Exactly what the dev container does: Unix Makefiles, Debug, build/, and the LLVM 20 packages installed by .devcontainer/Dockerfile. Ninja is not part of that image, hence Makefiles.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CT_Clang_INSTALL_DIR": "/usr/lib/llvm-20/"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows (MSVC x64, Ninja, Release)",
+      "description": "Native MSVC build, driven by scripts\\build_windows.ps1: cl.exe comes from the vcvars64 environment the script imports, so running this preset by hand needs a Developer PowerShell. CT_Clang_INSTALL_DIR is read from the environment because, unlike Linux, Windows has no canonical place where an LLVM development tree lives.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "CT_CLANG_INSTALL_DIR": "$penv{CT_CLANG_INSTALL_DIR}"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CT_Clang_INSTALL_DIR": "$env{CT_CLANG_INSTALL_DIR}",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "inherits": "windows-msvc-release",
+      "displayName": "Windows (MSVC x64, Ninja, Debug)",
+      "description": "Same toolchain, unoptimised and with debug info, in its own directory so it does not fight the Release cache. CMAKE_MSVC_RUNTIME_LIBRARY stays MultiThreadedDLL (inherited): the prebuilt Clang/LLVM libraries llvm.org ships for Windows are Release builds against /MD, and linking a /MDd object against them fails with LNK2038 'RuntimeLibrary mismatch' plus _ITERATOR_DEBUG_LEVEL errors. Debug info is still generated, only the C runtime is the release one.",
+      "binaryDir": "${sourceDir}/build/windows-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-default",
+      "configurePreset": "linux-default",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-default",
+      "configurePreset": "linux-default",
+      "output": {
+        "outputOnFailure": true
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    }
+  ]
+}

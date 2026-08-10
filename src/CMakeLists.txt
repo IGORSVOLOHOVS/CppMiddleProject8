@@ -22,7 +22,14 @@
 
 # set(CodeRefactor_SOURCES
 #   CodeRefactor.cpp)
-set(CMAKE_BUILD_TYPE Debug)
+# NOTE: CMAKE_BUILD_TYPE is intentionally NOT pinned here. Setting it in this
+# directory used to silently override whatever the top level (or a preset, or
+# -DCMAKE_BUILD_TYPE) had chosen, but only for this directory. On Windows that
+# is fatal rather than untidy: refactor_tool would be compiled against the debug
+# CRT (/MDd) while the prebuilt Clang/LLVM libraries it links are release (/MD),
+# and the link dies with LNK2038 runtime-library mismatches. The top-level
+# CMakeLists.txt already defaults to Debug, so the dev-container build is
+# unchanged.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(refactor_tool RefactorTool.cpp)
