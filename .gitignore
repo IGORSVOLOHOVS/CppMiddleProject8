@@ -3,3 +3,7 @@ CMakeUserPresets.json
 *build/
 .DS_Store
 .env
+
+# Byte-code left behind by the helper scripts in scripts/.
+__pycache__/
+*.py[cod]
