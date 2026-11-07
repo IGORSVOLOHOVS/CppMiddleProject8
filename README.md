@@ -22,3 +22,7 @@ tests/tests_data/   the tool's inputs and their expected outputs, never compiled
 `.\recipe.ps1 test` imports the MSVC environment, configures against the Clang/LLVM development tree, builds the tool and its tests, runs `ctest`, `clang-tidy` and `clang-format`, and searches `include` and `src` for locks and for `throw`, `try` and `catch`. It needs Visual Studio 2022 with the C++ workload, the `clang+llvm-20.1.8-x86_64-pc-windows-msvc` archive unpacked under `C:\LLVM`, cmake, ninja and LLVM's `clang-tidy` and `clang-format`. `docs/install.md` has the details, and `docs/manual.md` shows how to run the tool.
 
 MIT licensed: `LICENSE` is the course's, copyright Yandex Practicum.
+
+## Lab requirements
+
+This repository complies with [revision 4.0.0](http://127.0.0.1:3000/igors-lab/software-requirements/src/tag/v4.0.0/BEST_REQUIREMENTS.md) of the lab requirements, except R-02 (#8), R-09 (#9), R-12 (#10), R-13 (#11), R-13 (#12), R-14 (#13), R-37 (#14), R-41 (#15), R-42 (#16).
