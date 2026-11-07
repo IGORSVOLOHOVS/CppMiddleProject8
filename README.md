@@ -1,171 +1,28 @@
-# cpp-middle-project-sprint-8 <!-- omit in toc -->
+# cpp-middle-project8
 
-- [Начало работы](#начало-работы)
-- [Сборка проекта и запуск тестов](#сборка-проекта-и-запуск-тестов)
-  - [Команды для сборки проекта](#команды-для-сборки-проекта)
-  - [Команды для запуска приложения](#команды-для-запуска-приложения)
-- [Сборка под Windows](#сборка-под-windows)
+A refactoring tool on Clang LibTooling: `refactor_tool <file.cpp> --` parses a C++ file with Clang 20, matches its AST and rewrites the file in place. It began as the course template of sprint 8 of the Yandex Practicum "Middle C++ developer" course, which asks for three refactorings:
 
-Шаблон репозитория для практического задания 8-го спринта «Мидл разработчик С++»
+- add `virtual` to the destructor of a class that is a base class,
+- add `override` to a method that overrides one and does not say so,
+- make the loop variable of a range-for over objects a `const` reference.
 
-## Начало работы
+The template is not finished. `src/RefactorTool.cpp` still holds the course's `todo` markers: its matchers match every destructor, method and variable, and its handlers report a remark for each and rewrite nothing. `tests/tests_data` holds the three inputs and the output each should become, and `check_refactor.sh` compares them, so the work left is written down where it will be judged.
 
-1. Нажмите зелёную кнопку `Use this template`, затем `Create a new repository`.
-2. Назовите свой репозиторий.
-3. Склонируйте созданный репозиторий командой `git clone your-repository-name`.
-4. Создайте новую ветку командой `git switch -c development`.
-5. Откройте проект в `Visual Studio Code`.
-6. Нажмите `F1` и откройте проект в dev-контейнере командой `Dev Containers: Reopen in Container`.
+## Layout
 
-## Сборка проекта и запуск тестов
-
-Данный репозиторий использует три инструмента:
-
-- **cmake** — генератор систем сборки для C и C++. Позволяет создавать проекты, которые могут компилироваться на различных платформах и с различными компиляторами. Подробнее о cmake:
-  - https://dzen.ru/a/ZzZGUm-4o0u-IQlb
-  - https://neerc.ifmo.ru/wiki/index.php?title=CMake_Tutorial
-  - https://cmake.org/cmake/help/book/mastering-cmake/cmake/Help/guide/tutorial/index.html
-
-- **VS Code Dev Docker container** - Docker контейнер, который содержит полностью настроенное окружение для выполнение задания. Подробнее об этой функциональности:
-  - https://habr.com/ru/articles/822707/ - "Почти все, что вы хотели бы знать про Docker"
-  - https://code.visualstudio.com/docs/devcontainers/containers - официальная документация VS Code
-  - https://www.youtube.com/watch?v=p9L7YFqHGk4 - "Docker container for VS Code"
-  - https://www.youtube.com/watch?v=pg19Z8LL06w&t=174s&pp=ygUPRG9ja2VyY29udGFpbmVy - "Docker in 1 hour"
-
-### Команды для сборки проекта
-
-- Создайте папку `build`
-- Перейдите в нее `cd build`
-- Запустите `cmake -DCMAKE_BUILD_TYPE=Debug -DCT_Clang_INSTALL_DIR=/usr/lib/llvm-20/ ../ `
-- Запустите `make`
-
-### Команды для запуска приложения
-
-```bash
-cd build
-
-./refactor_tool ../tests_data/for_refactor.cpp
+```text
+include/            RefactorTool.h, the match callback, the AST consumer and the frontend action
+src/                RefactorTool.cpp, the matchers, the handlers and main
+tests/              the GoogleTest binary and the manual-list check
+tests/tests_data/   the tool's inputs and their expected outputs, never compiled
 ```
 
-Для запуска отладки нажмите `F5`, будет произведена сборка и отладка проекта.
+## Build and test
 
-Для проверки Ваших изменений так же предусмотрен скрипт `check_refactor.sh`, запустив который, Вы сможете проверить базовые сценарии рафакторинга.
+`.\recipe.ps1 test` imports the MSVC environment, configures against the Clang/LLVM development tree, builds the tool and its tests, runs `ctest`, `clang-tidy` and `clang-format`, and searches `include` and `src` for locks and for `throw`, `try` and `catch`. It needs Visual Studio 2022 with the C++ workload, the `clang+llvm-20.1.8-x86_64-pc-windows-msvc` archive unpacked under `C:\LLVM`, cmake, ninja and LLVM's `clang-tidy` and `clang-format`. `docs/install.md` has the details, and `docs/manual.md` shows how to run the tool.
 
-## Сборка под Windows
+MIT licensed: `LICENSE` is the course's, copyright Yandex Practicum.
 
-Dev-контейнер остаётся основным способом сборки, но проект собирается и нативно —
-компилятором MSVC, без Docker и без WSL. Точка входа одна: `scripts\build_windows.ps1`.
+## Lab requirements
 
-### Что нужно установить
-
-- **Visual Studio 2022** (Community достаточно) с рабочей нагрузкой
-  «Разработка классических приложений на C++». Нужен компилятор MSVC v143;
-  проверялось на `cl.exe` 19.44.
-- **CMake ≥ 3.21** и **Ninja** на `PATH`. Оба приезжают вместе с компонентом
-  Visual Studio «C++ CMake tools for Windows», если ставить их отдельно не хочется.
-- **Clang/LLVM 19 или новее — именно в виде дистрибутива для разработки.**
-  `CMakeLists.txt` вызывает `find_package(Clang REQUIRED CONFIG)` и линкует
-  `clangTooling` / `clangBasic` / `clangASTMatchers`, то есть ему нужны C++-заголовки
-  и библиотеки LLVM, а не только `clang.exe`. Привычный установщик
-  `LLVM-<версия>-win64.exe` для этого **не подходит**: в нём лежит лишь C API
-  (`include\llvm-c`, `libclang.lib`) и нет `lib\cmake\clang\ClangConfig.cmake`.
-  Подходит архив с той же страницы релиза:
-
-  ```powershell
-  curl.exe -L -o "$env:TEMP\clang+llvm.tar.xz" `
-    https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz
-  New-Item -ItemType Directory -Force C:\LLVM | Out-Null
-  python -m tarfile -e "$env:TEMP\clang+llvm.tar.xz" C:\LLVM
-  ```
-
-  Распаковка Python-ом, а не `tar -xJf`: встроенный в Windows 10 `tar.exe`
-  (bsdtar 3.5.2) собран без LZMA и отвечает
-  `Can't initialize filter; unable to run program "xz -d -qq"`.
-
-  Распакованный в `C:\LLVM\` дистрибутив скрипт находит сам — ни ключа, ни
-  переменной окружения не нужно: он ищет там каталог вида
-  `clang+llvm-*-windows-msvc` и проверяет, что внутри действительно есть
-  `include\llvm` и `lib\cmake\clang\ClangConfig.cmake`. Если распаковали в
-  другое место, передайте путь ключом `-ClangInstallDir` либо задайте
-  переменную окружения `CT_CLANG_INSTALL_DIR`. Проверялось на
-  `clang+llvm-20.1.8-x86_64-pc-windows-msvc.tar.xz` (896 МиБ архивом, около
-  4 ГиБ после распаковки) — та же мажорная версия, что и LLVM 20 в
-  dev-контейнере.
-- **GoogleTest ставить не нужно**: его тянет `FetchContent`, поэтому первой сборке
-  нужен интернет, а последующим — уже нет.
-
-Отдельно запускать «Developer Command Prompt» не требуется — скрипт сам находит
-`vcvars64.bat` (через `vswhere`, с запасными путями) и вносит окружение MSVC в
-свой процесс.
-
-### Как собрать
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
-```
-
-Если Clang/LLVM лежит не в `C:\LLVM\`, укажите его явно:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1 `
-    -ClangInstallDir D:\toolchains\clang+llvm-20.1.8-x86_64-pc-windows-msvc
-```
-
-Скрипт конфигурирует CMake, собирает всё, прогоняет `ctest` и в конце печатает
-пути к получившимся `.exe`. Результат лежит в `build\windows`: приложение —
-`build\windows\refactor_tool.exe`, тесты — `build\windows\refactor_tool_tests.exe`.
-
-```powershell
-build\windows\refactor_tool.exe tests\tests_data\for_refactor.cpp --
-```
-
-Полезные ключи:
-
-| Ключ | Зачем |
-| --- | --- |
-| `-BuildType Debug` | сборка с отладочной информацией в `build\windows-debug` |
-| `-Clean` | удалить каталог сборки и собрать с нуля |
-| `-SkipTests` | не запускать `ctest` |
-| `-ClangInstallDir <путь>` | указать дистрибутив Clang/LLVM явно |
-
-### Пресеты CMake
-
-`CMakePresets.json` описывает обе платформы, поэтому IDE (Visual Studio, VS Code,
-CLion) подхватывает конфигурацию сама:
-
-| Пресет | Платформа | Генератор | Каталог сборки |
-| --- | --- | --- | --- |
-| `linux-default` | Linux / dev-контейнер | Unix Makefiles | `build/` |
-| `windows-msvc-release` | Windows, MSVC x64 | Ninja | `build/windows/` |
-| `windows-msvc-debug` | Windows, MSVC x64 | Ninja | `build/windows-debug/` |
-
-Windows-пресеты рассчитаны на окружение MSVC и берут путь к Clang/LLVM из
-переменной `CT_CLANG_INSTALL_DIR`: если запускать их руками, а не через
-`scripts\build_windows.ps1`, делать это надо из «Developer PowerShell for VS 2022»
-и с заранее выставленной переменной, иначе CMake не найдёт ни `cl.exe`, ни
-`ClangConfig.cmake`.
-
-### Что было несовместимо с MSVC
-
-Три места в сборке предполагали GCC/Clang и на Windows ломались; правки сделаны
-под `if(MSVC)`, поэтому сборка в dev-контейнере не изменилась:
-
-- `-Wall -fdiagnostics-color=always` и `-fno-rtti` заменены на `/W3 /utf-8` и
-  `/GR-`. `/utf-8` тут не косметика: тексты диагностик в `src/RefactorTool.cpp`
-  русские, и без этого ключа MSVC читает UTF-8-файлы в системной ANSI-кодировке.
-- `check_cxx_compiler_flag(-fvisibility-inlines-hidden ...)` под MSVC не проходит
-  и оставляет результат пустым, из-за чего следующий `if(${...} EQUAL "1")`
-  становился синтаксической ошибкой CMake ещё до конфигурации. Проверка теперь
-  выполняется только не под MSVC.
-- `LLVMExports.cmake` из готовой Windows-сборки llvm.org хранит **абсолютный**
-  путь к `diaguids.lib` с машины сборщика (там была Visual Studio 2019
-  Professional). На чужой машине Ninja падает с «missing and no known rule to
-  make it» ещё до компиляции, поэтому CMake подменяет эту запись на DIA SDK
-  локальной Visual Studio.
-
-Кроме того, `src/CMakeLists.txt` больше не прибивает `CMAKE_BUILD_TYPE` к `Debug`
-для своего подкаталога: готовые библиотеки Clang/LLVM для Windows собраны в
-Release против `/MD`, и объект, собранный с `/MDd`, не линкуется с ними
-(`LNK2038`). Поэтому же оба Windows-пресета явно просят
-`CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL` — отладочная информация в
-`windows-msvc-debug` есть, а вот C runtime остаётся release.
+This repository complies with [revision 4.0.0](http://127.0.0.1:3000/igors-lab/software-requirements/src/tag/v4.0.0/BEST_REQUIREMENTS.md) of the lab requirements, except R-02 (#8), R-09 (#9), R-12 (#10), R-13 (#11), R-13 (#12), R-14 (#13), R-37 (#14), R-41 (#15), R-42 (#16).
